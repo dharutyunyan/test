@@ -20,6 +20,7 @@ class Mankind implements Iterator
         return self::$instance;
     }
 
+    // for larger csv files need 'memory_limit' and 'max_execution_time' configuration changed
     public function loadPersonsFromCsv($path)
     {
         $persons = [];
