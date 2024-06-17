@@ -4,6 +4,7 @@ namespace Service;
 
 use PHPUnit\Framework\TestCase;
 use Test\Enum\CurrencyEnum;
+use Test\Exception\NoBinFoundException;
 use Test\Service\Client\BinApiClientInterface;
 use Test\Service\Client\ExchangeRateApiClientInterface;
 use Test\Service\Client\Response\BinApiResponse;
@@ -17,7 +18,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 class CommissionCalculatorServiceTest extends TestCase
 {
     #[DataProvider('transactionProvider')]
-    public function testGetTransactions(
+    public function testCalculateCommissionFromFile(
         array $transactions,
         BinApiResponseInterface $binResponse,
         ExchangeRateApiResponseInterface $ratesResponse,
@@ -49,6 +50,41 @@ class CommissionCalculatorServiceTest extends TestCase
         $commissionResult = $commissionCalculatorService->calculateCommissionFromFile('test.file');
         $commission = $commissionResult['commissions'][0];
         $this->assertEquals($commission, $expectedCommission);
+    }
+
+    #[DataProvider('transactionProvider')]
+    public function testCalculateCommissionFromFileError(
+        array $transactions,
+        BinApiResponseInterface $binResponse,
+        ExchangeRateApiResponseInterface $ratesResponse,
+        float $expectedCommission,
+    ): void {
+        $fileParser = $this->createMock(FileParserService::class);
+        $fileParser->method('readFile')->willReturn('');
+        $fileParser->method('getRows')->willReturn($transactions);
+
+        $binClient = $this->createMock(BinApiClientInterface::class);
+
+        $binClient->method('getBin')->willThrowException(new NoBinFoundException('Not Found'));
+
+        $exchangeApi = $this->createMock(ExchangeRateApiClientInterface::class);
+
+        $exchangeApi->method('getRates')->willReturn($ratesResponse);
+
+
+        $commissionCalculatorService = new CommissionCalculatorService(
+            $fileParser,
+            $binClient,
+            $exchangeApi
+        );
+
+        $transactions = $commissionCalculatorService->getTransactions('test.file');
+
+        $this->assertCount(1, $transactions);
+
+        $commissionResult = $commissionCalculatorService->calculateCommissionFromFile('test.file');
+        $error = $commissionResult['error'];
+        $this->assertCount(1, $error);
     }
 
     public static function transactionProvider(): array
